@@ -9,7 +9,9 @@ const githubPagesBasePath =
 const nextConfig: NextConfig = {
   output: "export",
   images: { unoptimized: true },
-  basePath: githubPagesBasePath,
+  // GitHub Pages mounts the uploaded artifact under the repository path itself.
+  // Setting Next's basePath here makes vinext skip prerendering `/`, leaving
+  // the published artifact without an index.html. Only assets need the prefix.
   assetPrefix: githubPagesBasePath || undefined,
 };
 
