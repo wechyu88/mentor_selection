@@ -18,7 +18,7 @@ export default function Home() {
   const [me,setMe]=useState<Profile|null>(null); const [people,setPeople]=useState<Profile[]>([]); const [teachers,setTeachers]=useState<Teacher[]>([]); const [requests,setRequests]=useState<Request[]>([]);
   const [identity,setIdentity]=useState(""); const [password,setPassword]=useState(""); const [newPassword,setNewPassword]=useState(""); const [confirmPassword,setConfirmPassword]=useState(""); const [resetTarget,setResetTarget]=useState(""); const [notice,setNotice]=useState("请使用学号、工号或管理员编号登录。"); const [loading,setLoading]=useState(true); const [busy,setBusy]=useState(false); const [invite,setInvite]=useState(""); const [forced,setForced]=useState<Record<string,string>>({});
   async function refresh() {
-    const {data:{user}}=await supabase.auth.getUser(); if(!user){setMe(null);setPeople([]);setTeachers([]);setRequests([]);setLoading(false);return;}
+    const {data:{session}}=await supabase.auth.getSession(); const user=session?.user; if(!user){setMe(null);setPeople([]);setTeachers([]);setRequests([]);setLoading(false);return;}
     setLoading(true); const [mine,all,ts,rs]=await Promise.all([
       supabase.from("profiles").select("id,identity_no,full_name,role,cohort,is_thesis_student,active,must_change_password").eq("id",user.id).maybeSingle(),
       supabase.from("profiles").select("id,identity_no,full_name,role,cohort,is_thesis_student,active,must_change_password").eq("active",true),
