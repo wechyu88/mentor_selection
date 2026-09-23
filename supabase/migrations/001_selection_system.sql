@@ -55,6 +55,23 @@ begin
   if (selection.origin='student' and selection.teacher_id <> auth.uid()) or (selection.origin='teacher' and selection.student_id <> auth.uid()) then raise exception '只有申请接收方可以处理'; end if;
   update public.selection_requests set state=case when accept_request then 'confirmed' else 'rejected' end, decided_at=now() where id=request_id;
 end; $$;
+create or replace function public.set_teacher_forced_capacity(target_teacher_id uuid, new_capacity integer) returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not public.is_admin() then raise exception '管理员权限不足'; end if;
+  if new_capacity is not null and new_capacity < 0 then raise exception '强制名额不能小于 0'; end if;
+  update public.teachers set forced_capacity=new_capacity, updated_at=now() where profile_id=target_teacher_id and active;
+  if not found then raise exception '教师不可用'; end if;
+  if (select coalesce(sum(forced_capacity), 0) from public.teachers where active) > (select count(*) from public.profiles where active and is_thesis_student) then raise exception '所有强制名额之和不能超过毕业论文学生总数'; end if;
+  perform public.recalculate_teacher_capacities();
+end; $$;
+create or replace function public.set_teacher_active(target_teacher_id uuid, new_active boolean) returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not public.is_admin() then raise exception '管理员权限不足'; end if;
+  if not new_active and exists (select 1 from public.selection_requests where teacher_id=target_teacher_id and state in ('pending','confirmed')) then raise exception '该教师仍有待处理或已确认的双选关系'; end if;
+  update public.teachers set active=new_active, updated_at=now() where profile_id=target_teacher_id;
+  update public.profiles set active=new_active where id=target_teacher_id;
+  perform public.recalculate_teacher_capacities();
+end; $$;
 alter table public.profiles enable row level security;
 alter table public.teachers enable row level security;
 alter table public.selection_requests enable row level security;
@@ -63,4 +80,4 @@ create policy "active users read teachers" on public.teachers for select to auth
 create policy "participants read own requests" on public.selection_requests for select to authenticated using (student_id=auth.uid() or teacher_id=auth.uid() or public.is_admin());
 grant usage on schema public to authenticated;
 grant select on public.profiles, public.teachers, public.selection_requests to authenticated;
-grant execute on function public.create_selection_request(uuid), public.teacher_invite_student(uuid), public.decide_selection_request(uuid,boolean), public.recalculate_teacher_capacities() to authenticated;
+grant execute on function public.create_selection_request(uuid), public.teacher_invite_student(uuid), public.decide_selection_request(uuid,boolean), public.recalculate_teacher_capacities(), public.set_teacher_forced_capacity(uuid,integer), public.set_teacher_active(uuid,boolean) to authenticated;
