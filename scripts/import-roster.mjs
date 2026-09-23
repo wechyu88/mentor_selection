@@ -21,10 +21,12 @@ const students = [...text.matchAll(/^(\d+)\t(.+)\t(\d+)$/gm)].map((match) => {
 const teacherNames = ["顾沈明","陈荣品","管林挺","江有福","谭小球","吴远红","叶其宏","张建科","毕振波","王广伟","亓常松","候志凌","黄海锋","郑婵","王丹丹","温程远","刘中华","蒋林甫","樊超","陈俊皓","莫云华","刘蕊","李慧","赵强","李伟"];
 const teachers = teacherNames.map((full_name, index) => ({ full_name, identity_no: `T${String(index + 1).padStart(3, "0")}`, role: "teacher", cohort: null, is_thesis_student: false }));
 const admin = { full_name: "系统管理员", identity_no: "ADMIN0505", role: "admin", cohort: null, is_thesis_student: false };
-async function post(path, body) { const response = await fetch(`${url}${path}`, { method:"POST", headers:{apikey:serviceKey,Authorization:`Bearer ${serviceKey}`,"Content-Type":"application/json",Prefer:"return=representation"}, body:JSON.stringify(body) }); if (!response.ok) throw new Error(`${response.status}: ${await response.text()}`); return response.json(); }
-async function patch(path, body) { const response = await fetch(`${url}${path}`, { method:"PATCH", headers:{apikey:serviceKey,Authorization:`Bearer ${serviceKey}`,"Content-Type":"application/json"}, body:JSON.stringify(body) }); if (!response.ok) throw new Error(`${response.status}: ${await response.text()}`); }
-async function get(path) { const response = await fetch(`${url}${path}`, { headers:{apikey:serviceKey,Authorization:`Bearer ${serviceKey}`} }); if (!response.ok) throw new Error(`${response.status}: ${await response.text()}`); return response.json(); }
-async function upsert(path, body) { const response = await fetch(`${url}${path}`, { method:"POST", headers:{apikey:serviceKey,Authorization:`Bearer ${serviceKey}`,"Content-Type":"application/json",Prefer:"resolution=merge-duplicates"}, body:JSON.stringify(body) }); if (!response.ok) throw new Error(`${response.status}: ${await response.text()}`); }
+const authHeaders = { apikey:serviceKey, Authorization:`Bearer ${serviceKey}` };
+async function request(path, init = {}) { let lastError; for (let attempt = 0; attempt < 4; attempt += 1) { try { const response = await fetch(`${url}${path}`, { ...init, headers:{ ...authHeaders, ...(init.headers ?? {}) }, signal:AbortSignal.timeout(30000) }); if (!response.ok) throw new Error(`${response.status}: ${await response.text()}`); return response; } catch (error) { lastError = error; if (attempt < 3) { console.log(`网络波动，${2 ** attempt} 秒后重试…`); await new Promise((resolve) => setTimeout(resolve, 1000 * 2 ** attempt)); } } } throw lastError; }
+async function post(path, body) { return (await request(path, { method:"POST", headers:{"Content-Type":"application/json",Prefer:"return=representation"}, body:JSON.stringify(body) })).json(); }
+async function patch(path, body) { await request(path, { method:"PATCH", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body) }); }
+async function get(path) { return (await request(path)).json(); }
+async function upsert(path, body) { await request(path, { method:"POST", headers:{"Content-Type":"application/json",Prefer:"resolution=merge-duplicates"}, body:JSON.stringify(body) }); }
 const knownUsers = new Map((await get("/auth/v1/admin/users?page=1&per_page=1000")).users.map((user) => [user.email.toLowerCase(), user]));
 const teacherAccounts = [];
 const records = [...students, ...teachers, admin];
